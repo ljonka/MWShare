@@ -2,6 +2,7 @@ package de.rosapavian.mwshare;
 
 import android.content.Context;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -14,6 +15,7 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.ListView;
 import android.widget.SimpleCursorAdapter;
+import android.widget.Toast;
 
 import org.apache.http.impl.client.AbstractHttpClient;
 import org.apache.http.impl.client.DefaultHttpClient;
@@ -23,6 +25,7 @@ import org.mediawiki.api.MWApi;
 import java.io.IOException;
 import java.net.URL;
 import java.util.ArrayList;
+import java.util.EmptyStackException;
 
 /**
  * Save Settings in key value db
@@ -30,15 +33,20 @@ import java.util.ArrayList;
  */
 public class MainActivity extends AppCompatActivity {
 
-            public static final String MWPAGE     = "mwpage";     //: uri, use https only, while mobile internet is unsecure
-            public static final String MWUSER     = "mwuser";     //: string
-            public static final String MWPASS     = "mwpass";     //: password
-            public static final String MWCHECKED  = "mwchecked";  //: boolean //did the connection worked already?
+    public static final String SETTINGS     = "mwsettings";     //: uri, use https only, while mobile internet is unsecure
+    public static final String MWPAGE     = "mwpage";     //: uri, use https only, while mobile internet is unsecure
+    public static final String MWUSER     = "mwuser";     //: string
+    public static final String MWPASS     = "mwpass";     //: password
+    public static final String MWCHECKED  = "mwchecked";  //: boolean //did the connection worked already?
 
     PagesDatabase mDB;
     ListView mListView;
 
     public String sAllPagesURL = "api.php?action=query&list=allpages";
+
+    CharSequence text = "";
+    Context context;
+    int duration = Toast.LENGTH_LONG;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -46,6 +54,8 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         Toolbar toolbar = (Toolbar) findViewById(R.id.toolbar);
         setSupportActionBar(toolbar);
+
+        context = getApplicationContext();
 
         // Get intent, action and MIME type
         Intent intent = getIntent();
@@ -70,12 +80,24 @@ public class MainActivity extends AppCompatActivity {
 
     }
 
+    protected void onResume(){
+        super.onResume();
+        new DownloadFilesTask().execute();
+    }
+
 
     private class DownloadFilesTask extends AsyncTask<URL, Integer, Long>
     {
         protected Long doInBackground(URL... urls){
+            SharedPreferences sharedPreferences = getSharedPreferences(MainActivity.SETTINGS, MODE_PRIVATE);
             try {
-                String apiUrl = "https://help.bluespice.com/api.php";
+                //String apiUrl = "https://help.bluespice.com/api.php";
+                //break on empty hostname
+                String hostname = sharedPreferences.getString(MainActivity.MWPAGE, "");
+                if(hostname.isEmpty()){
+                    throw new EmptyStackException();
+                }
+                String apiUrl = "https://" + sharedPreferences.getString(MainActivity.MWPAGE, "") + "/api.php";
                 AbstractHttpClient httpClient = new DefaultHttpClient();
 
                 ConnectivityManager connMgr = (ConnectivityManager)
@@ -90,7 +112,7 @@ public class MainActivity extends AppCompatActivity {
                     Log.e("MWApi", "Passed");
                     ArrayList<ApiResult> iterator = ar.getNodes("/api/query/pages/page");
                     for (ApiResult title : iterator) {
-                        Log.e("Title", title.getString("@title"));
+                        //Log.e("Title", title.getString("@title"));
                     }
 
                     //https://help.bluespice.com/api.php?action=query&list=allcategories&acprop=size
@@ -101,16 +123,20 @@ public class MainActivity extends AppCompatActivity {
                     Log.e("MWApi", "Passed");
                     ArrayList<ApiResult> iterator2 = ar2.getNodes("/api/query/allcategories/c");
                     for (ApiResult title : iterator2) {
-                        Log.e("Category", title.getString("text()"));
+                        //Log.e("Category", title.getString("text()"));
                     }
+                    text = "Connected to wiki";
                 } else {
                     // display error
                     Log.e("MWApi", "error with connection");
+                    text = "error with Internet connection";
                 }
 
             }catch(IOException ex){
                 Log.e("MWException", "Error while connecting to mw");
                 Log.e("MWException", ex.getMessage());
+
+                text = ex.getMessage();
             }
 
             return null;
@@ -124,7 +150,10 @@ public class MainActivity extends AppCompatActivity {
 
         @Override
         protected void onPostExecute(Long result) {
-
+            if(text.length() > 0) {
+                Toast toast = Toast.makeText(context, text, duration);
+                toast.show();
+            }
         }
     }
 

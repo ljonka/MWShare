@@ -15,8 +15,7 @@ public class MWSettings extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_settings);
-        SharedPreferences sharedPreferences = getPreferences(
-                MODE_PRIVATE);
+        SharedPreferences sharedPreferences = getSharedPreferences(MainActivity.SETTINGS, MODE_PRIVATE);
         //restore data in view elements
         EditText pageUrl = (EditText)findViewById(R.id.editText3);
         EditText username = (EditText)findViewById(R.id.editText4);
@@ -27,15 +26,14 @@ public class MWSettings extends AppCompatActivity {
     }
 
     public void onClickClose(View view){
-        SharedPreferences sharedPreferences = getPreferences(
-                MODE_PRIVATE);
+        SharedPreferences sharedPreferences = getSharedPreferences(MainActivity.SETTINGS, MODE_PRIVATE);
         EditText mPageURI, mUsername, mPassword;
         mPageURI = (EditText)findViewById(R.id.editText3);
         mUsername = (EditText)findViewById(R.id.editText4);
         mPassword = (EditText)findViewById(R.id.editText5);
 
         SharedPreferences.Editor editor =
-                getPreferences(MODE_PRIVATE).edit();
+                getSharedPreferences(MainActivity.SETTINGS, MODE_PRIVATE).edit();
         editor.putString(MainActivity.MWPAGE, mPageURI.getText().toString());
         editor.putString(MainActivity.MWUSER, mUsername.getText().toString());
         editor.putString(MainActivity.MWPASS, mPassword.getText().toString());
