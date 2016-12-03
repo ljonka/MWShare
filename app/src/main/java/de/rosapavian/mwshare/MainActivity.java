@@ -3,6 +3,7 @@ package de.rosapavian.mwshare;
 import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
+import android.database.Cursor;
 import android.net.ConnectivityManager;
 import android.net.NetworkInfo;
 import android.net.Uri;
@@ -13,6 +14,9 @@ import android.support.v7.widget.Toolbar;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
+import android.widget.AdapterView;
+import android.widget.AdapterView.OnItemClickListener;
 import android.widget.ListView;
 import android.widget.SimpleCursorAdapter;
 import android.widget.Toast;
@@ -42,6 +46,12 @@ public class MainActivity extends AppCompatActivity {
     PagesDatabase mDB;
     ListView mListView;
 
+    Intent intent = null;
+    String action;
+    String type;
+    String titlePage;
+    String shareContent = "";
+
     public String sAllPagesURL = "api.php?action=query&list=allpages";
 
     CharSequence text = "";
@@ -56,13 +66,13 @@ public class MainActivity extends AppCompatActivity {
         setSupportActionBar(toolbar);
 
         context = getApplicationContext();
+        mDB = new PagesDatabase(context);
 
         // Get intent, action and MIME type
-        Intent intent = getIntent();
-        String action = intent.getAction();
-        String type = intent.getType();
+        intent = getIntent();
+        action = intent.getAction();
+        type = intent.getType();
 
-        new DownloadFilesTask().execute();
 
         if (Intent.ACTION_SEND.equals(action) && type != null) {
             if ("text/plain".equals(type)) {
@@ -82,7 +92,56 @@ public class MainActivity extends AppCompatActivity {
 
     protected void onResume(){
         super.onResume();
+        //Generate ListView from SQLite Database
+        displayListView();
         new DownloadFilesTask().execute();
+    }
+
+    private void displayListView() {
+
+        Cursor cursor = mDB.getTitleList();
+
+        // The desired columns to be bound
+        String[] columns = new String[] {
+                PagesDatabase.FIELD_TITLE
+        };
+
+        // the XML defined views which the data will be bound to
+        int[] to = new int[] {
+                android.R.id.text1,
+        };
+
+        // create the adapter using the cursor pointing to the desired data
+        //as well as the layout information
+        SimpleCursorAdapter dataAdapter = new SimpleCursorAdapter(
+                this, android.R.layout.simple_list_item_1,
+                cursor,
+                columns,
+                to,
+                0);
+
+        ListView listView = (ListView) findViewById(R.id.listView);
+        // Assign adapter to ListView
+        listView.setAdapter(dataAdapter);
+
+        listView.setOnItemClickListener(new OnItemClickListener() {
+            @Override
+            public void onItemClick(AdapterView<?> listView, View view,
+                                    int position, long id) {
+                // Get the cursor, positioned to the corresponding row in the result set
+                Cursor cursor = (Cursor) listView.getItemAtPosition(position);
+
+                // Get the state's capital from this row in the database.
+                titlePage = cursor.getString(cursor.getColumnIndexOrThrow("title"));
+                shareContent = intent.getStringExtra(Intent.EXTRA_TEXT);
+                Log.e("content", "url: " + shareContent);
+                //InsertString
+                if(!shareContent.isEmpty()) {
+                    new InsertString().execute();
+                }
+            }
+        });
+
     }
 
 
@@ -97,7 +156,7 @@ public class MainActivity extends AppCompatActivity {
                 if(hostname.isEmpty()){
                     throw new EmptyStackException();
                 }
-                String apiUrl = "https://" + sharedPreferences.getString(MainActivity.MWPAGE, "") + "/api.php";
+                String apiUrl = sharedPreferences.getString(MainActivity.MWPAGE, "") + "/api.php";
                 AbstractHttpClient httpClient = new DefaultHttpClient();
 
                 ConnectivityManager connMgr = (ConnectivityManager)
@@ -111,8 +170,12 @@ public class MainActivity extends AppCompatActivity {
                     ApiResult ar = rb.get();
                     Log.e("MWApi", "Passed");
                     ArrayList<ApiResult> iterator = ar.getNodes("/api/query/pages/page");
+
+                    mDB.removeAll();
+
                     for (ApiResult title : iterator) {
                         //Log.e("Title", title.getString("@title"));
+                        mDB.addRecord(title.getString("@title"));
                     }
 
                     //https://help.bluespice.com/api.php?action=query&list=allcategories&acprop=size
@@ -125,6 +188,17 @@ public class MainActivity extends AppCompatActivity {
                     for (ApiResult title : iterator2) {
                         //Log.e("Category", title.getString("text()"));
                     }
+
+                    //write page example
+                    MWApi.RequestBuilder rb3 = api.action("edit");
+                    rb3.param("title", "Diskussion:Hauptseite");
+                    rb3.param("section", "new");
+                    rb3.param("appendtext", "Blablub");
+                    rb3.param("token", api.getEditToken());//use csrftoken
+                    ApiResult ar3 = rb3.post();
+                    Log.e("MWApi", ar3.getNode("/api/edit").toString());
+                    Log.e("MWApi", "write Passed");
+
                     text = "Connected to wiki";
                 } else {
                     // display error
@@ -153,6 +227,71 @@ public class MainActivity extends AppCompatActivity {
             if(text.length() > 0) {
                 Toast toast = Toast.makeText(context, text, duration);
                 toast.show();
+            }
+            //Generate ListView from SQLite Database
+            displayListView();
+        }
+    }
+
+    private class InsertString extends AsyncTask<URL, Integer, Long>
+    {
+        protected Long doInBackground(URL... urls){
+            SharedPreferences sharedPreferences = getSharedPreferences(MainActivity.SETTINGS, MODE_PRIVATE);
+            try {
+                //break on empty hostname
+                String hostname = sharedPreferences.getString(MainActivity.MWPAGE, "");
+                if(hostname.isEmpty()){
+                    throw new EmptyStackException();
+                }
+                String apiUrl = sharedPreferences.getString(MainActivity.MWPAGE, "") + "/api.php";
+                AbstractHttpClient httpClient = new DefaultHttpClient();
+
+                ConnectivityManager connMgr = (ConnectivityManager)
+                        getSystemService(Context.CONNECTIVITY_SERVICE);
+                NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
+                if (networkInfo != null && networkInfo.isConnected()) {
+                    MWApi api = new MWApi(apiUrl, httpClient) ;
+                    //write page example
+                    MWApi.RequestBuilder rb3 = api.action("edit");
+                    rb3.param("title", titlePage);
+                    rb3.param("section", "new");
+                    rb3.param("appendtext", shareContent);
+                    rb3.param("token", api.getEditToken());//use csrftoken
+                    ApiResult ar3 = rb3.post();
+                    Log.e("MWApi", ar3.getNode("/api/edit").toString());
+                    Log.e("MWApi", "write Passed");
+
+                    text = "Data shared";
+                } else {
+                    // display error
+                    Log.e("MWApi", "error with connection");
+                    text = "error with Internet connection";
+                }
+
+            }catch(IOException ex){
+                Log.e("MWException", "Error while connecting to mw");
+                Log.e("MWException", ex.getMessage());
+
+                text = ex.getMessage();
+            }
+
+            return null;
+        }
+
+        @Override
+        protected void onProgressUpdate(Integer... progress)
+        {
+
+        }
+
+        @Override
+        protected void onPostExecute(Long result) {
+            if(text.length() > 0) {
+                Toast toast = Toast.makeText(context, text, duration);
+                toast.show();
+            }else{
+                Toast.makeText(getApplicationContext(),
+                        titlePage + " updated", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -200,17 +339,5 @@ public class MainActivity extends AppCompatActivity {
         }
 
         return super.onOptionsItemSelected(item);
-    }
-
-    private void updateWordList() {
-        SimpleCursorAdapter simpleCursorAdapter = new
-                SimpleCursorAdapter(
-                this,
-                android.R.layout.simple_list_item_1,
-                mDB.getTitleList(),
-                new String[]{"title"},
-                new int[]{android.R.id.text1},
-                0);
-        mListView.setAdapter(simpleCursorAdapter);
     }
 }

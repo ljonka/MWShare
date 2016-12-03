@@ -12,12 +12,12 @@ import android.util.Log;
  */
 
 public class PagesDatabase extends SQLiteOpenHelper {
-    private static final String DATABASE_NAME =
+    public static final String DATABASE_NAME =
             "pages.db";
-    private static final String TABLE_PAGE =
+    public static final String TABLE_PAGE =
             "page";
-    private static final String FIELD_TITLE = "title";
-    private static final int DATABASE_VERSION = 1;
+    public static final String FIELD_TITLE = "title";
+    public static final int DATABASE_VERSION = 1;
 
     PagesDatabase(Context context) {
         super(context, DATABASE_NAME, null, DATABASE_VERSION);
@@ -79,6 +79,24 @@ public class PagesDatabase extends SQLiteOpenHelper {
         String query = "SELECT _id, " + FIELD_TITLE +
                 " FROM " + TABLE_PAGE + " ORDER BY " + FIELD_TITLE +
                 " ASC";
-        return db.rawQuery(query, null);
+        try {
+            Cursor c = db.rawQuery(query, null);
+            return c;
+        }catch(Exception ex){
+            Log.e("DB Error", ex.getMessage());
+            return null;
+        }
+
+    }
+
+    public int removeAll(){
+        SQLiteDatabase db = getReadableDatabase();
+        String query = "DELETE FROM " + TABLE_PAGE;
+        try {
+            return db.delete(TABLE_PAGE, null, null);
+        }catch(Exception ex){
+            Log.e("DB Error", ex.getMessage());
+            return 0;
+        }
     }
 }
