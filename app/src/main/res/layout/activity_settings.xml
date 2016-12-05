@@ -6,7 +6,7 @@
     android:orientation="vertical">
 
     <EditText
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:inputType="textUri"
         android:ems="10"
@@ -14,7 +14,7 @@
         android:hint="http(s)://wiki.company.com" />
 
     <EditText
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:inputType="textPersonName"
         android:text="WikiSysop"
@@ -23,7 +23,7 @@
         android:hint="Benutzername" />
 
     <EditText
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:inputType="textPassword"
         android:ems="10"

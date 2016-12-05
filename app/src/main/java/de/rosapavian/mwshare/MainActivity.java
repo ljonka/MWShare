@@ -17,6 +17,7 @@ import android.view.MenuItem;
 import android.view.View;
 import android.widget.AdapterView;
 import android.widget.AdapterView.OnItemClickListener;
+import android.widget.EditText;
 import android.widget.ListView;
 import android.widget.SimpleCursorAdapter;
 import android.widget.Toast;
@@ -52,11 +53,10 @@ public class MainActivity extends AppCompatActivity {
     String titlePage;
     String shareContent = "";
 
-    public String sAllPagesURL = "api.php?action=query&list=allpages";
-
     CharSequence text = "";
     Context context;
     int duration = Toast.LENGTH_LONG;
+    EditText editsearch;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -136,35 +136,56 @@ public class MainActivity extends AppCompatActivity {
                 shareContent = intent.getStringExtra(Intent.EXTRA_TEXT);
                 Log.e("content", "url: " + shareContent);
                 //InsertString
-                if(!shareContent.isEmpty()) {
+                if(shareContent != null) {
                     new InsertString().execute();
+                }else{
+                    Toast.makeText(getApplicationContext(),
+                            "nothing to share..", Toast.LENGTH_SHORT).show();
                 }
             }
         });
 
     }
 
+    public String getApiUrl(){
+        SharedPreferences sharedPreferences = getSharedPreferences(MainActivity.SETTINGS, MODE_PRIVATE);
+        String hostname = sharedPreferences.getString(MainActivity.MWPAGE, "http://192.168.178.20/mediawiki");
+        if(hostname.isEmpty()){
+            throw new EmptyStackException();
+        }
+        String apiUrl = hostname + "/api.php";
+        return apiUrl;
+    }
+
+    public String loginOnMediawiki(MWApi api){
+        SharedPreferences sharedPreferences = getSharedPreferences(MainActivity.SETTINGS, MODE_PRIVATE);
+        String username = sharedPreferences.getString(MainActivity.MWUSER, "");
+        String password = sharedPreferences.getString(MainActivity.MWPASS, "");
+        try {
+            return api.login(username, password);
+        }catch(Exception ex){
+            return null;
+        }
+    }
+
 
     private class DownloadFilesTask extends AsyncTask<URL, Integer, Long>
     {
         protected Long doInBackground(URL... urls){
-            SharedPreferences sharedPreferences = getSharedPreferences(MainActivity.SETTINGS, MODE_PRIVATE);
+
             try {
                 //String apiUrl = "https://help.bluespice.com/api.php";
                 //break on empty hostname
-                String hostname = sharedPreferences.getString(MainActivity.MWPAGE, "");
-                if(hostname.isEmpty()){
-                    throw new EmptyStackException();
-                }
-                String apiUrl = sharedPreferences.getString(MainActivity.MWPAGE, "") + "/api.php";
-                AbstractHttpClient httpClient = new DefaultHttpClient();
 
+                AbstractHttpClient httpClient = new DefaultHttpClient();
+                String apiUrl = getApiUrl();
                 ConnectivityManager connMgr = (ConnectivityManager)
                         getSystemService(Context.CONNECTIVITY_SERVICE);
                 NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
                 if (networkInfo != null && networkInfo.isConnected()) {
                     // fetch data
                     MWApi api = new MWApi(apiUrl, httpClient) ;
+                    loginOnMediawiki(api);
                     MWApi.RequestBuilder rb = api.action("query");
                     rb.param("generator", "allpages");
                     ApiResult ar = rb.get();
@@ -173,6 +194,7 @@ public class MainActivity extends AppCompatActivity {
 
                     mDB.removeAll();
 
+                    //update page list
                     for (ApiResult title : iterator) {
                         //Log.e("Title", title.getString("@title"));
                         mDB.addRecord(title.getString("@title"));
@@ -180,24 +202,24 @@ public class MainActivity extends AppCompatActivity {
 
                     //https://help.bluespice.com/api.php?action=query&list=allcategories&acprop=size
 
-                    MWApi.RequestBuilder rb2 = api.action("query");
+                    /*MWApi.RequestBuilder rb2 = api.action("query");
                     rb2.param("list", "allcategories");
                     ApiResult ar2 = rb2.get();
                     Log.e("MWApi", "Passed");
                     ArrayList<ApiResult> iterator2 = ar2.getNodes("/api/query/allcategories/c");
                     for (ApiResult title : iterator2) {
                         //Log.e("Category", title.getString("text()"));
-                    }
+                    }*/
 
                     //write page example
-                    MWApi.RequestBuilder rb3 = api.action("edit");
+                    /*MWApi.RequestBuilder rb3 = api.action("edit");
                     rb3.param("title", "Diskussion:Hauptseite");
                     rb3.param("section", "new");
                     rb3.param("appendtext", "Blablub");
                     rb3.param("token", api.getEditToken());//use csrftoken
                     ApiResult ar3 = rb3.post();
                     Log.e("MWApi", ar3.getNode("/api/edit").toString());
-                    Log.e("MWApi", "write Passed");
+                    Log.e("MWApi", "write Passed");*/
 
                     text = "Connected to wiki";
                 } else {
@@ -236,14 +258,9 @@ public class MainActivity extends AppCompatActivity {
     private class InsertString extends AsyncTask<URL, Integer, Long>
     {
         protected Long doInBackground(URL... urls){
-            SharedPreferences sharedPreferences = getSharedPreferences(MainActivity.SETTINGS, MODE_PRIVATE);
             try {
                 //break on empty hostname
-                String hostname = sharedPreferences.getString(MainActivity.MWPAGE, "");
-                if(hostname.isEmpty()){
-                    throw new EmptyStackException();
-                }
-                String apiUrl = sharedPreferences.getString(MainActivity.MWPAGE, "") + "/api.php";
+                String apiUrl = getApiUrl();
                 AbstractHttpClient httpClient = new DefaultHttpClient();
 
                 ConnectivityManager connMgr = (ConnectivityManager)
@@ -251,11 +268,12 @@ public class MainActivity extends AppCompatActivity {
                 NetworkInfo networkInfo = connMgr.getActiveNetworkInfo();
                 if (networkInfo != null && networkInfo.isConnected()) {
                     MWApi api = new MWApi(apiUrl, httpClient) ;
+                    loginOnMediawiki(api);
                     //write page example
                     MWApi.RequestBuilder rb3 = api.action("edit");
-                    rb3.param("title", titlePage);
+                    rb3.param("title", "Diskussion:" + titlePage);
                     rb3.param("section", "new");
-                    rb3.param("appendtext", shareContent);
+                    rb3.param("appendtext", shareContent + "\n~~~~");
                     rb3.param("token", api.getEditToken());//use csrftoken
                     ApiResult ar3 = rb3.post();
                     Log.e("MWApi", ar3.getNode("/api/edit").toString());
